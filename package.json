@@ -1,0 +1,29 @@
+{
+  "name": "roblox-2021-studio-mcp",
+  "version": "1.0.0",
+  "description": "Model Context Protocol (MCP) server & plugin bridge for 2021 Roblox Studio",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "uuid": "^11.1.0"
+  },
+  "keywords": [
+    "roblox",
+    "roblox-studio",
+    "2021-roblox",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "opencode",
+    "cursor",
+    "ai-agent"
+  ],
+  "author": "Daniel",
+  "license": "MIT"
+}
