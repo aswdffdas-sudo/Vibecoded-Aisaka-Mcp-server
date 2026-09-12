@@ -1,0 +1,84 @@
+/* content.css - Aisaka 2021 Studio Bar for ChatGPT, Claude, and DeepSeek */
+.aisaka-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #181a20;
+  border: 1px solid #2d3139;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin: 8px 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  color: #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  z-index: 9999;
+}
+
+.aisaka-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: #60a5fa;
+  margin-right: 4px;
+}
+
+.aisaka-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.aisaka-btn {
+  background: #262a34;
+  color: #f3f4f6;
+  border: 1px solid #374151;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.aisaka-btn:hover {
+  background: #374151;
+  border-color: #60a5fa;
+}
+
+.aisaka-run-btn {
+  position: absolute;
+  top: 6px;
+  right: 60px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.aisaka-run-btn:hover {
+  background: #059669;
+}
+
+.aisaka-run-btn.running {
+  background: #f59e0b;
+}
+
+.aisaka-run-btn.done {
+  background: #3b82f6;
+}

@@ -52,6 +52,52 @@ app.post("/respond", (req, res) => {
   res.json({ status: "ok" });
 });
 
+// =========================================================================
+// REST API FOR BROWSER EXTENSION & WEB CLIENTS
+// =========================================================================
+app.get("/api/status", (req, res) => {
+  res.json({
+    ok: true,
+    server: "Aisaka 2021 Roblox Studio MCP",
+    version: "1.2.0",
+    port: PORT,
+    pending: pendingRequests.size,
+    tools: [
+      "screen_capture",
+      "execute_luau",
+      "get_tree",
+      "read_script",
+      "write_script",
+      "create_instance",
+      "delete_instance",
+      "get_output_log",
+    ],
+  });
+});
+
+app.post("/api/call", async (req, res) => {
+  const { tool, args } = req.body;
+  if (!tool) {
+    return res.status(400).json({ success: false, error: "Missing required 'tool' parameter" });
+  }
+
+  if (tool === "screen_capture") {
+    try {
+      const b64 = captureScreenBase64();
+      return res.json({ success: true, tool, result: { imageBase64: b64 } });
+    } catch (err) {
+      return res.status(500).json({ success: false, tool, error: err.message });
+    }
+  }
+
+  try {
+    const result = await sendToStudio(tool, args || {});
+    return res.json({ success: true, tool, result });
+  } catch (err) {
+    return res.status(500).json({ success: false, tool, error: err.message });
+  }
+});
+
 app.listen(PORT, "127.0.0.1", () => {
   console.error(`[Roblox 2021 MCP] HTTP bridge listening on http://127.0.0.1:${PORT}`);
 });
@@ -111,7 +157,6 @@ if ($procs) {
         [WinUser]::ShowWindow($targetHwnd, 9) | Out-Null
         Start-Sleep -Milliseconds 200
     }
-    # Bring Studio to foreground so hardware-accelerated 3D viewport is visible
     [WinUser]::SetForegroundWindow($targetHwnd) | Out-Null
     Start-Sleep -Milliseconds 350
 }
@@ -127,7 +172,6 @@ if ($targetHwnd -ne [IntPtr]::Zero) {
     $gfx.CopyFromScreen($rect.Left, $rect.Top, 0, 0, (New-Object System.Drawing.Size($w, $h)))
     $gfx.Dispose()
 } else {
-    # Fullscreen fallback
     $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
     $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
     $gfx = [System.Drawing.Graphics]::FromImage($bmp)
@@ -166,7 +210,7 @@ $ms.Dispose()
 const server = new Server(
   {
     name: "roblox-2021-studio",
-    version: "1.1.0",
+    version: "1.2.0",
   },
   {
     capabilities: {

@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Aisaka 2021 Roblox Studio AI Bridge",
+  "version": "1.0.0",
+  "description": "Connects ChatGPT, Claude, and DeepSeek directly to 2021 Roblox Studio / Aisaka Studio via the local MCP bridge.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "http://127.0.0.1:3021/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://chat.deepseek.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Aisaka 2021 Studio Bridge"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://chat.deepseek.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

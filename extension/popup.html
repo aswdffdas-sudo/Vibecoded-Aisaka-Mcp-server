@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Aisaka 2021 Studio Bridge</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="title-row">
+      <span class="status-dot" id="statusDot"></span>
+      <h2>Aisaka 2021 Studio</h2>
+    </div>
+    <span class="badge" id="statusBadge">Checking...</span>
+  </div>
+
+  <div class="content">
+    <div class="info-card">
+      <div class="info-item">
+        <span class="label">Bridge Port:</span>
+        <span class="val">3021</span>
+      </div>
+      <div class="info-item">
+        <span class="label">Engine:</span>
+        <span class="val">2021 Studio / Luau</span>
+      </div>
+    </div>
+
+    <div class="actions-grid">
+      <button class="btn btn-primary" id="btnScreenshot">
+        📸 View Screenshot
+      </button>
+      <button class="btn btn-secondary" id="btnGetTree">
+        🌳 Copy Game Tree
+      </button>
+      <button class="btn btn-secondary" id="btnGetLogs">
+        📜 View Console Logs
+      </button>
+    </div>
+
+    <div class="code-box">
+      <label for="codeInput">Quick Luau Exec:</label>
+      <textarea id="codeInput" placeholder="print('Hello from Extension!')"></textarea>
+      <button class="btn btn-run" id="btnRunCode">▶ Run in Studio</button>
+    </div>
+
+    <div id="previewContainer" class="preview-box" style="display:none;">
+      <img id="screenshotImg" alt="Studio Preview">
+    </div>
+
+    <div id="outputBox" class="output-box" style="display:none;"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
