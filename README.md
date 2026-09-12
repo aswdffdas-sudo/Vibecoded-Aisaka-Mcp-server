@@ -1,27 +1,17 @@
 # 2021 Roblox Studio MCP Bridge 🎮🤖
 
-Connect AI coding assistants (**OpenCode**, **Claude Desktop / Claude Code**, **Cursor**, **ChatGPT**) directly to **2021 Roblox Studio** using Anthropic's **Model Context Protocol (MCP)**.
+Connect AI coding assistants (**OpenCode**, **Claude Desktop / Claude Code**, **Cursor**, **Codex**, **Windsurf**, **Gemini CLI**) directly to **2021 Roblox Studio / Aisaka Studio** using Anthropic's **Model Context Protocol (MCP)**.
 
 ---
 
-## 🌟 Why This Exists
+## 🌟 Features
 
-Modern Roblox Studio builds include an internal `StudioMCP.exe`, but older versions of Roblox Studio (such as the 2021 engine builds) do not have built-in MCP support and cannot run modern Luau syntax.
-
-This project provides a complete, retro-compatible MCP bridge:
-- **`MCPBridge2021.lua`**: A Studio plugin written specifically for 2021 Luau/Lua 5.1 (compatible with older iteration syntax, `ChangeHistoryService:SetWaypoint`, and HTTP long-polling).
-- **`server.js`**: A lightweight Node.js daemon that connects via Model Context Protocol (`stdio`) to your AI client while bridging commands to Roblox Studio via a local HTTP daemon.
-
----
-
-## 📦 Project Contents
-
-| File | Description |
-| :--- | :--- |
-| `MCPBridge2021.lua` | Roblox Studio plugin script (place in your Studio Plugins folder). |
-| `server.js` | Local Node.js MCP server & HTTP bridge daemon. |
-| `package.json` | Project dependencies (`@modelcontextprotocol/sdk`, `express`, `cors`, `uuid`). |
-| `SETUP.txt` | Quick plain-text notepad instructions. |
+- **`screen_capture`**: Captures a screenshot of the 2021 Roblox Studio / Aisaka window directly into the AI's chat context so vision models can see your viewport, models, and GUIs!
+- **`execute_luau`**: Executes arbitrary Luau code in edit mode with automatic `ChangeHistoryService` undo checkpoints.
+- **`read_script` & `write_script`**: Reads and overwrites the complete source code of scripts, local scripts, and module scripts.
+- **`get_tree`**: Explores the DataModel hierarchy (`Workspace`, `StarterGui`, `ServerScriptService`, etc.).
+- **`create_instance` & `delete_instance`**: Creates parts, models, or GUIs with custom properties, or deletes objects.
+- **`get_output_log`**: Retrieves recent console messages from Studio.
 
 ---
 
@@ -43,7 +33,7 @@ This project provides a complete, retro-compatible MCP bridge:
 
 ---
 
-### 2. Install MCP Server Dependencies
+### 2. Install Dependencies
 Open your terminal (PowerShell or Command Prompt) in the repository folder and run:
 
 ```bash
@@ -52,10 +42,10 @@ npm install
 
 ---
 
-### 3. Connect to Your AI Client
+## 🔌 Connect to Your AI Client
 
-#### Option A: OpenCode
-Add this to your `opencode.json` (or `~/.config/opencode/opencode.jsonc`):
+### Option 1: OpenCode
+Add this to `opencode.json` (or `~/.config/opencode/opencode.jsonc`):
 
 ```json
 {
@@ -70,7 +60,9 @@ Add this to your `opencode.json` (or `~/.config/opencode/opencode.jsonc`):
 }
 ```
 
-#### Option B: Claude Desktop
+---
+
+### Option 2: Claude Desktop
 Add this to `%APPDATA%\Claude\claude_desktop_config.json`:
 
 ```json
@@ -84,7 +76,52 @@ Add this to `%APPDATA%\Claude\claude_desktop_config.json`:
 }
 ```
 
-#### Option C: Cursor / Claude Code CLI
+---
+
+### Option 3: Cursor
+In your project folder, create `.cursor/mcp.json` (or add in Cursor **Settings > Features > MCP**):
+
+```json
+{
+  "mcpServers": {
+    "roblox-2021": {
+      "command": "node",
+      "args": ["C:/path/to/server.js"]
+    }
+  }
+}
+```
+
+---
+
+### Option 4: Codex CLI
+Run in your terminal:
+
+```bash
+codex mcp add roblox-2021 -- node "C:/path/to/server.js"
+```
+
+---
+
+### Option 5: Windsurf
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "roblox-2021": {
+      "command": "node",
+      "args": ["C:/path/to/server.js"]
+    }
+  }
+}
+```
+
+---
+
+### Option 6: Claude Code CLI
+Run in your terminal:
+
 ```bash
 claude mcp add roblox-2021 -- node "C:/path/to/server.js"
 ```
@@ -95,6 +132,7 @@ claude mcp add roblox-2021 -- node "C:/path/to/server.js"
 
 | Tool | Description |
 | :--- | :--- |
+| `screen_capture` | Captures a high-resolution screenshot of the Studio window or active screen for visual AI inspection. |
 | `execute_luau` | Executes arbitrary Luau code in Studio's edit context with undo waypoint tracking. |
 | `get_tree` | Traverses and returns the DataModel hierarchy (`game.Workspace`, `game.StarterGui`, etc.). |
 | `read_script` | Reads the complete `.Source` text of any Script, LocalScript, or ModuleScript. |

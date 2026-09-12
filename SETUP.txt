@@ -2,8 +2,9 @@
           AISAKA 2021 ROBLOX STUDIO MCP BRIDGE - SETUP GUIDE
 ================================================================================
 
-This project connects AI tools (OpenCode, Claude, Cursor, ChatGPT) directly 
-to 2021 Roblox Studio using Anthropic's Model Context Protocol (MCP).
+This project connects AI tools (OpenCode, Claude Desktop, Cursor, Codex, 
+Windsurf, Claude Code) directly to 2021 Roblox Studio / Aisaka Studio using 
+Anthropic's Model Context Protocol (MCP).
 
 --------------------------------------------------------------------------------
 STEP 1: INSTALL THE STUDIO PLUGIN
@@ -22,9 +23,6 @@ STEP 1: INSTALL THE STUDIO PLUGIN
 6. In Studio's Output window, you should see:
    [MCP 2021] Bridge initialized. Connecting to http://127.0.0.1:3021 ...
 
-   (Note: There is also an "MCP Bridge" button added to your top toolbar to 
-   pause or resume polling whenever you want).
-
 
 --------------------------------------------------------------------------------
 STEP 2: INSTALL SERVER DEPENDENCIES
@@ -36,11 +34,11 @@ STEP 2: INSTALL SERVER DEPENDENCIES
 
 
 --------------------------------------------------------------------------------
-STEP 3: CONFIGURE YOUR AI ASSISTANT
+STEP 3: CONFIGURE YOUR AI CLIENT
 --------------------------------------------------------------------------------
 
 A) FOR OPENCODE:
-Add this inside your opencode.json or ~/.config/opencode/opencode.jsonc:
+Add to your opencode.json or ~/.config/opencode/opencode.jsonc:
 
 {
   "$schema": "https://opencode.ai/config.json",
@@ -52,14 +50,11 @@ Add this inside your opencode.json or ~/.config/opencode/opencode.jsonc:
     }
   }
 }
-* Remember to replace C:/path/to/server.js with the actual path to server.js!
 
 
 B) FOR CLAUDE DESKTOP:
-Open your Claude Desktop config file:
-%APPDATA%\Claude\claude_desktop_config.json
+Open %APPDATA%\Claude\claude_desktop_config.json and add:
 
-Add the server:
 {
   "mcpServers": {
     "roblox-2021": {
@@ -70,7 +65,38 @@ Add the server:
 }
 
 
-C) FOR CLAUDE CODE CLI:
+C) FOR CURSOR:
+Create .cursor/mcp.json in your workspace (or via Settings -> Features -> MCP):
+
+{
+  "mcpServers": {
+    "roblox-2021": {
+      "command": "node",
+      "args": ["C:/path/to/server.js"]
+    }
+  }
+}
+
+
+D) FOR CODEX CLI:
+Run in your terminal:
+codex mcp add roblox-2021 -- node "C:/path/to/server.js"
+
+
+E) FOR WINDSURF:
+Open ~/.codeium/windsurf/mcp_config.json and add:
+
+{
+  "mcpServers": {
+    "roblox-2021": {
+      "command": "node",
+      "args": ["C:/path/to/server.js"]
+    }
+  }
+}
+
+
+F) FOR CLAUDE CODE CLI:
 Run in your terminal:
 claude mcp add roblox-2021 -- node "C:/path/to/server.js"
 
@@ -78,6 +104,7 @@ claude mcp add roblox-2021 -- node "C:/path/to/server.js"
 --------------------------------------------------------------------------------
 AVAILABLE TOOLS EXPOSED TO THE AI
 --------------------------------------------------------------------------------
+- screen_capture: Captures a screenshot of the Studio window/viewport for the AI.
 - execute_luau: Runs Luau/Lua code directly inside 2021 Studio edit mode.
 - get_tree: Inspects game hierarchy and objects in Workspace, StarterGui, etc.
 - read_script: Reads the complete source code of any script in your game.
@@ -87,5 +114,5 @@ AVAILABLE TOOLS EXPOSED TO THE AI
 - get_output_log: Reads the Studio console output history.
 
 ================================================================================
-You're all set! Now your AI can inspect and edit your 2021 Roblox Studio game!
+You're all set! Now your AI can inspect, see, and edit your 2021 Roblox game!
 ================================================================================

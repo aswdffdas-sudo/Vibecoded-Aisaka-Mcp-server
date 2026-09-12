@@ -7,6 +7,10 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { v4 as uuidv4 } from "uuid";
+import { execSync } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 const PORT = 3021;
 const app = express();
@@ -28,7 +32,7 @@ app.get("/poll", (req, res) => {
       });
     }
   }
-  return res.status(204).end(); // No pending tasks
+  return res.status(204).end();
 });
 
 // Endpoint called by 2021 Roblox Studio plugin with execution results
@@ -71,11 +75,106 @@ function sendToStudio(tool, args, timeoutMs = 25000) {
   });
 }
 
+// Native Windows Screen Capture Utility
+function captureScreenBase64() {
+  const outFile = path.join(os.tmpdir(), `studio_cap_${Date.now()}.b64`);
+  const psScript = `
+Add-Type -AssemblyName System.Drawing, System.Windows.Forms
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinUser {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hDC, uint nFlags);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+"@
+
+$targetHwnd = [IntPtr]::Zero
+
+# Detect running Studio / Aisaka window
+$procs = Get-Process | Where-Object { 
+    $_.MainWindowTitle -like "*Roblox Studio*" -or 
+    $_.MainWindowTitle -like "*Aisaka*" -or 
+    $_.ProcessName -like "*RobloxStudio*" -or
+    $_.ProcessName -like "*Aisaka*"
+}
+
+if ($procs) {
+    $targetHwnd = $procs[0].MainWindowHandle
+    if ([WinUser]::IsIconic($targetHwnd)) {
+        [WinUser]::ShowWindow($targetHwnd, 9) | Out-Null
+        Start-Sleep -Milliseconds 150
+    }
+}
+
+if ($targetHwnd -ne [IntPtr]::Zero) {
+    $rect = New-Object WinUser+RECT
+    [WinUser]::GetWindowRect($targetHwnd, [ref]$rect) | Out-Null
+    $w = [Math]::Max(10, $rect.Right - $rect.Left)
+    $h = [Math]::Max(10, $rect.Bottom - $rect.Top)
+    
+    $bmp = New-Object System.Drawing.Bitmap($w, $h)
+    $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+    $hdc = $gfx.GetHdc()
+    $printOk = [WinUser]::PrintWindow($targetHwnd, $hdc, 2)
+    $gfx.ReleaseHdc($hdc)
+    $gfx.Dispose()
+
+    # Fallback to screen area copy if PrintWindow returns blank
+    if (-not $printOk) {
+        $bmp.Dispose()
+        $bmp = New-Object System.Drawing.Bitmap($w, $h)
+        $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+        $gfx.CopyFromScreen($rect.Left, $rect.Top, 0, 0, (New-Object System.Drawing.Size($w, $h)))
+        $gfx.Dispose()
+    }
+} else {
+    # Fullscreen fallback
+    $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+    $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+    $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+    $gfx.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+    $gfx.Dispose()
+}
+
+$ms = New-Object System.IO.MemoryStream
+$bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+$b64 = [Convert]::ToBase64String($ms.ToArray())
+$ms.Dispose()
+
+[System.IO.File]::WriteAllText("${outFile.replace(/\\/g, "\\\\")}", $b64)
+`;
+
+  const scriptPath = path.join(os.tmpdir(), `cap_${Date.now()}.ps1`);
+  try {
+    fs.writeFileSync(scriptPath, psScript, "utf-8");
+    execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, {
+      timeout: 12000,
+      windowsHide: true,
+    });
+    if (fs.existsSync(outFile)) {
+      const b64 = fs.readFileSync(outFile, "utf-8").trim();
+      return b64;
+    }
+    throw new Error("Screenshot output file not generated");
+  } finally {
+    try { fs.unlinkSync(scriptPath); } catch {}
+    try { fs.unlinkSync(outFile); } catch {}
+  }
+}
+
 // Setup Model Context Protocol (MCP) Server
 const server = new Server(
   {
     name: "roblox-2021-studio",
-    version: "1.0.0",
+    version: "1.1.0",
   },
   {
     capabilities: {
@@ -87,6 +186,14 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      {
+        name: "screen_capture",
+        description: "Captures a screenshot of the 2021 Roblox Studio / Aisaka window or active screen and returns it as an image for visual inspection",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
       {
         name: "execute_luau",
         description: "Executes Luau code in 2021 Roblox Studio edit context and returns output",
@@ -213,6 +320,36 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  
+  if (name === "screen_capture") {
+    try {
+      const b64 = captureScreenBase64();
+      return {
+        content: [
+          {
+            type: "image",
+            data: b64,
+            mimeType: "image/png",
+          },
+          {
+            type: "text",
+            text: "Captured screenshot of Roblox Studio / Aisaka window.",
+          },
+        ],
+      };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Screen capture failed: " + err.message,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
   try {
     const res = await sendToStudio(name, args || {});
     return {
