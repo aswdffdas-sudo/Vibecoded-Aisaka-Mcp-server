@@ -167,6 +167,11 @@ REM --- 3. Run the bridge ------------------------------------------------------
 echo.
 echo   [3/3] Starting bridge...
 
+REM Clean up any stale MCP listener on port 3021
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3021 ^| findstr LISTENING 2^>nul') do (
+    taskkill /F /PID %%a >nul 2>nul
+)
+
 REM If a previous bridge is already listening on 17613, say so instead of
 REM silently killing it - a double-launch is easy to do by mistake (e.g.
 REM double-clicking start.bat twice) and should not look like nothing happened.
