@@ -1,56 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Aisaka 2021 Studio Bridge</title>
-  <link rel="stylesheet" href="popup.css">
+  <meta charset="utf-8" />
+  <style>
+    body { width: 248px; margin: 0; font-family: "Segoe UI", sans-serif; background: #16161a; color: #e8e8ec; }
+    .wrap { padding: 14px; }
+    h1 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+    .ver { font-size: 9.5px; font-weight: 500; letter-spacing: 0.2px;
+           color: rgba(255,255,255,0.55); background: none; border: none;
+           padding: 0; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #6b7280; }
+    .dot.on { background: #34d399; box-shadow: 0 0 8px #34d399; }
+    .dot.warn { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+    .row { font-size: 12px; opacity: 0.85; margin: 6px 0; }
+    button { width: 100%; margin-top: 8px; padding: 8px; border: 0; border-radius: 8px; cursor: pointer; font-size: 12px; }
+    .ghost { background: rgba(255,255,255,0.08); color: #e8e8ec; }
+    .kofi { background: rgba(255,105,135,.16); color: #ff8fa3; border: 1px solid rgba(255,105,135,.4) !important; font-weight: 700; }
+    code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; }
+  </style>
 </head>
 <body>
-  <div class="header">
-    <div class="title-row">
-      <span class="status-dot" id="statusDot"></span>
-      <h2>Aisaka 2021 Studio</h2>
+  <div class="wrap">
+    <h1><span id="dot" class="dot"></span> ZeroScript <span id="ver" class="ver"></span> <span style="font-size:9px;opacity:.6">DeepSeek</span></h1>
+    <div class="row" id="state">Bridge: …</div>
+    <div class="row" id="tools"></div>
+    <div class="row" id="servers" style="white-space:pre-line; font-family:ui-monospace,monospace; opacity:0.75"></div>
+    <button class="ghost" id="reconnect">↻ Reconnect bridge</button>
+    <button class="ghost" id="restart">⟳ Restart Roblox server</button>
+    <button class="ghost" id="settings">⚙ Settings</button>
+    <button class="kofi" id="kofi">♥ Tip the developer on Ko-fi</button>
+    <div class="row" style="margin-top:10px; opacity:0.6">
+      Run <code>start.bat</code> and open <b>Roblox Studio</b>, then go to a supported AI.
     </div>
-    <span class="badge" id="statusBadge">Checking...</span>
   </div>
-
-  <div class="content">
-    <div class="info-card">
-      <div class="info-item">
-        <span class="label">Bridge Port:</span>
-        <span class="val">3021</span>
-      </div>
-      <div class="info-item">
-        <span class="label">Engine:</span>
-        <span class="val">2021 Studio / Luau</span>
-      </div>
-    </div>
-
-    <div class="actions-grid">
-      <button class="btn btn-primary" id="btnScreenshot">
-        📸 View Screenshot
-      </button>
-      <button class="btn btn-secondary" id="btnGetTree">
-        🌳 Copy Game Tree
-      </button>
-      <button class="btn btn-secondary" id="btnGetLogs">
-        📜 View Console Logs
-      </button>
-    </div>
-
-    <div class="code-box">
-      <label for="codeInput">Quick Luau Exec:</label>
-      <textarea id="codeInput" placeholder="print('Hello from Extension!')"></textarea>
-      <button class="btn btn-run" id="btnRunCode">▶ Run in Studio</button>
-    </div>
-
-    <div id="previewContainer" class="preview-box" style="display:none;">
-      <img id="screenshotImg" alt="Studio Preview">
-    </div>
-
-    <div id="outputBox" class="output-box" style="display:none;"></div>
-  </div>
-
   <script src="popup.js"></script>
 </body>
 </html>

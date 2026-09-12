@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "roblox": {
+      "command": "node",
+      "args": [
+        "server.js"
+      ]
+    }
+  }
+}

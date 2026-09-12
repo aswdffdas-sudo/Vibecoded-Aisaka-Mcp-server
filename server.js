@@ -52,57 +52,66 @@ app.post("/respond", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// =========================================================================
-// REST API FOR BROWSER EXTENSION & WEB CLIENTS
-// =========================================================================
+// REST API for web extensions
 app.get("/api/status", (req, res) => {
   res.json({
     ok: true,
     server: "Aisaka 2021 Roblox Studio MCP",
-    version: "1.2.0",
+    version: "1.5.4-retro",
     port: PORT,
     pending: pendingRequests.size,
-    tools: [
-      "screen_capture",
-      "execute_luau",
-      "get_tree",
-      "read_script",
-      "write_script",
-      "create_instance",
-      "delete_instance",
-      "get_output_log",
-    ],
   });
 });
 
 app.post("/api/call", async (req, res) => {
   const { tool, args } = req.body;
-  if (!tool) {
-    return res.status(400).json({ success: false, error: "Missing required 'tool' parameter" });
-  }
+  if (!tool) return res.status(400).json({ success: false, error: "Missing 'tool'" });
 
   if (tool === "screen_capture") {
     try {
       const b64 = captureScreenBase64();
       return res.json({ success: true, tool, result: { imageBase64: b64 } });
     } catch (err) {
-      return res.status(500).json({ success: false, tool, error: err.message });
+      return res.status(500).json({ success: false, error: err.message });
     }
   }
 
   try {
-    const result = await sendToStudio(tool, args || {});
+    const result = await handleToolDispatch(tool, args || {});
     return res.json({ success: true, tool, result });
   } catch (err) {
-    return res.status(500).json({ success: false, tool, error: err.message });
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.listen(PORT, "127.0.0.1", () => {
+const httpListener = app.listen(PORT, "127.0.0.1", () => {
   console.error(`[Roblox 2021 MCP] HTTP bridge listening on http://127.0.0.1:${PORT}`);
 });
+httpListener.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`[Roblox 2021 MCP] Port ${PORT} already bound by active instance. Reusing bridge.`);
+  } else {
+    throw err;
+  }
+});
 
-function sendToStudio(tool, args, timeoutMs = 25000) {
+async function sendToStudio(tool, args, timeoutMs = 25000) {
+  // If we are in secondary process where port was bound by another process, forward via localhost:3021
+  if (!httpListener.listening) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${PORT}/api/call`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool, args }),
+      });
+      const data = await res.json();
+      if (data.success) return data.result;
+      throw new Error(data.error || "Forwarding call failed");
+    } catch (e) {
+      throw new Error("Bridge communication error: " + e.message);
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const id = uuidv4();
     const timeout = setTimeout(() => {
@@ -142,7 +151,6 @@ public class WinUser {
 
 $targetHwnd = [IntPtr]::Zero
 
-# Detect running Studio / Aisaka window
 $procs = Get-Process | Where-Object { 
     $_.ProcessName -eq "AisakaStudio" -or
     $_.ProcessName -like "*RobloxStudio*" -or
@@ -206,11 +214,69 @@ $ms.Dispose()
   }
 }
 
+// Tool Dispatch Handler with ZeroScript / Modern Aliases
+async function handleToolDispatch(name, args) {
+  if (name === "list_roblox_studios") {
+    return {
+      studios: [
+        {
+          id: "2021-studio",
+          name: "2021 Roblox Studio (Aisaka)",
+        },
+      ],
+    };
+  }
+  if (name === "get_studio_state") {
+    return {
+      datamodel_type: "Edit",
+      play_state: "Edit",
+      state: "Ready",
+    };
+  }
+  if (name === "screen_capture") {
+    const b64 = captureScreenBase64();
+    return { imageBase64: b64 };
+  }
+  if (name === "search_game_tree") {
+    return await sendToStudio("get_tree", {
+      root: args.path || "game.Workspace",
+      maxDepth: args.max_depth || args.maxDepth || 2,
+    });
+  }
+  if (name === "script_read") {
+    return await sendToStudio("read_script", {
+      path: args.target_file || args.path,
+    });
+  }
+  if (name === "multi_edit") {
+    const filePath = args.file_path || args.path;
+    const edits = args.edits || [];
+    if (edits.length > 0 && edits[0].old_string === "") {
+      return await sendToStudio("write_script", {
+        path: filePath,
+        source: edits[0].new_string,
+      });
+    }
+    const current = await sendToStudio("read_script", { path: filePath });
+    let updated = current;
+    for (const edit of edits) {
+      if (edit.replace_all) {
+        updated = updated.split(edit.old_string).join(edit.new_string);
+      } else {
+        updated = updated.replace(edit.old_string, edit.new_string);
+      }
+    }
+    return await sendToStudio("write_script", { path: filePath, source: updated });
+  }
+
+  return await sendToStudio(name, args);
+}
+
 // Setup Model Context Protocol (MCP) Server
 const server = new Server(
   {
     name: "roblox-2021-studio",
-    version: "1.2.0",
+    version: "1.5.4",
   },
   {
     capabilities: {
@@ -223,24 +289,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
+        name: "list_roblox_studios",
+        description: "Lists connected 2021 Roblox Studio instances",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "get_studio_state",
+        description: "Gets the state of 2021 Roblox Studio (Edit/Play mode)",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
         name: "screen_capture",
-        description: "Captures a screenshot of the 2021 Roblox Studio / Aisaka window or active screen and returns it as an image for visual inspection",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
+        description: "Captures a screenshot of the 2021 Roblox Studio / Aisaka window",
+        inputSchema: { type: "object", properties: {} },
       },
       {
         name: "execute_luau",
         description: "Executes Luau code in 2021 Roblox Studio edit context and returns output",
         inputSchema: {
           type: "object",
-          properties: {
-            code: {
-              type: "string",
-              description: "Luau code to run in Studio",
-            },
-          },
+          properties: { code: { type: "string", description: "Luau code to run" } },
           required: ["code"],
         },
       },
@@ -250,31 +318,38 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            root: {
-              type: "string",
-              description: "Instance path (e.g. 'game.Workspace', 'game.ServerScriptService')",
-              default: "game.Workspace",
-            },
-            maxDepth: {
-              type: "number",
-              description: "Max recursive depth to traverse (default: 2)",
-              default: 2,
-            },
+            root: { type: "string", default: "game.Workspace" },
+            maxDepth: { type: "number", default: 2 },
+          },
+        },
+      },
+      {
+        name: "search_game_tree",
+        description: "Explore the Roblox game hierarchy tree",
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: { type: "string", default: "Workspace" },
+            max_depth: { type: "number", default: 2 },
           },
         },
       },
       {
         name: "read_script",
-        description: "Reads the complete Source text of a Script, LocalScript, or ModuleScript",
+        description: "Reads the complete Source text of a Script",
         inputSchema: {
           type: "object",
-          properties: {
-            path: {
-              type: "string",
-              description: "Full instance path (e.g. 'game.ServerScriptService.MyScript')",
-            },
-          },
+          properties: { path: { type: "string" } },
           required: ["path"],
+        },
+      },
+      {
+        name: "script_read",
+        description: "Reads a script from the Roblox workspace",
+        inputSchema: {
+          type: "object",
+          properties: { target_file: { type: "string" } },
+          required: ["target_file"],
         },
       },
       {
@@ -282,17 +357,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Updates or overwrites the Source text of an existing Script in Studio",
         inputSchema: {
           type: "object",
-          properties: {
-            path: {
-              type: "string",
-              description: "Full instance path",
-            },
-            source: {
-              type: "string",
-              description: "New source code for the script",
-            },
-          },
+          properties: { path: { type: "string" }, source: { type: "string" } },
           required: ["path", "source"],
+        },
+      },
+      {
+        name: "multi_edit",
+        description: "Edits or creates scripts in Studio",
+        inputSchema: {
+          type: "object",
+          properties: { file_path: { type: "string" }, edits: { type: "array" } },
+          required: ["file_path", "edits"],
         },
       },
       {
@@ -301,23 +376,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            className: {
-              type: "string",
-              description: "Class name of the instance (e.g. 'Part', 'Folder', 'Script')",
-            },
-            name: {
-              type: "string",
-              description: "Name for the new instance",
-            },
-            parent: {
-              type: "string",
-              description: "Parent path (e.g. 'game.Workspace')",
-              default: "game.Workspace",
-            },
-            properties: {
-              type: "object",
-              description: "Key-value dictionary of initial properties",
-            },
+            className: { type: "string" },
+            name: { type: "string" },
+            parent: { type: "string", default: "game.Workspace" },
+            properties: { type: "object" },
           },
           required: ["className"],
         },
@@ -327,12 +389,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Deletes an instance from the DataModel",
         inputSchema: {
           type: "object",
-          properties: {
-            path: {
-              type: "string",
-              description: "Path of instance to destroy",
-            },
-          },
+          properties: { path: { type: "string" } },
           required: ["path"],
         },
       },
@@ -341,13 +398,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Retrieves recent messages from Studio's output log",
         inputSchema: {
           type: "object",
-          properties: {
-            limit: {
-              type: "number",
-              description: "Maximum lines to retrieve (default: 50)",
-              default: 50,
-            },
-          },
+          properties: { limit: { type: "number", default: 50 } },
         },
       },
     ],
@@ -362,32 +413,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const b64 = captureScreenBase64();
       return {
         content: [
-          {
-            type: "image",
-            data: b64,
-            mimeType: "image/png",
-          },
-          {
-            type: "text",
-            text: "Captured screenshot of Roblox Studio / Aisaka window.",
-          },
+          { type: "image", data: b64, mimeType: "image/png" },
+          { type: "text", text: "Captured screenshot of Roblox Studio / Aisaka window." },
         ],
       };
     } catch (err) {
       return {
-        content: [
-          {
-            type: "text",
-            text: "Screen capture failed: " + err.message,
-          },
-        ],
+        content: [{ type: "text", text: "Screen capture failed: " + err.message }],
         isError: true,
       };
     }
   }
 
   try {
-    const res = await sendToStudio(name, args || {});
+    const res = await handleToolDispatch(name, args || {});
     return {
       content: [
         {
@@ -398,12 +437,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   } catch (err) {
     return {
-      content: [
-        {
-          type: "text",
-          text: "Error: " + err.message,
-        },
-      ],
+      content: [{ type: "text", text: "Error: " + err.message }],
       isError: true,
     };
   }
