@@ -88,7 +88,6 @@ public class WinUser {
     public struct RECT { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hDC, uint nFlags);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -99,18 +98,22 @@ $targetHwnd = [IntPtr]::Zero
 
 # Detect running Studio / Aisaka window
 $procs = Get-Process | Where-Object { 
-    $_.MainWindowTitle -like "*Roblox Studio*" -or 
-    $_.MainWindowTitle -like "*Aisaka*" -or 
+    $_.ProcessName -eq "AisakaStudio" -or
     $_.ProcessName -like "*RobloxStudio*" -or
-    $_.ProcessName -like "*Aisaka*"
+    $_.MainWindowTitle -like "*Roblox Studio*" -or 
+    $_.MainWindowTitle -like "*Aisaka*"
 }
 
 if ($procs) {
-    $targetHwnd = $procs[0].MainWindowHandle
+    $proc = $procs[0]
+    $targetHwnd = $proc.MainWindowHandle
     if ([WinUser]::IsIconic($targetHwnd)) {
         [WinUser]::ShowWindow($targetHwnd, 9) | Out-Null
-        Start-Sleep -Milliseconds 150
+        Start-Sleep -Milliseconds 200
     }
+    # Bring Studio to foreground so hardware-accelerated 3D viewport is visible
+    [WinUser]::SetForegroundWindow($targetHwnd) | Out-Null
+    Start-Sleep -Milliseconds 350
 }
 
 if ($targetHwnd -ne [IntPtr]::Zero) {
@@ -121,19 +124,8 @@ if ($targetHwnd -ne [IntPtr]::Zero) {
     
     $bmp = New-Object System.Drawing.Bitmap($w, $h)
     $gfx = [System.Drawing.Graphics]::FromImage($bmp)
-    $hdc = $gfx.GetHdc()
-    $printOk = [WinUser]::PrintWindow($targetHwnd, $hdc, 2)
-    $gfx.ReleaseHdc($hdc)
+    $gfx.CopyFromScreen($rect.Left, $rect.Top, 0, 0, (New-Object System.Drawing.Size($w, $h)))
     $gfx.Dispose()
-
-    # Fallback to screen area copy if PrintWindow returns blank
-    if (-not $printOk) {
-        $bmp.Dispose()
-        $bmp = New-Object System.Drawing.Bitmap($w, $h)
-        $gfx = [System.Drawing.Graphics]::FromImage($bmp)
-        $gfx.CopyFromScreen($rect.Left, $rect.Top, 0, 0, (New-Object System.Drawing.Size($w, $h)))
-        $gfx.Dispose()
-    }
 } else {
     # Fullscreen fallback
     $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
