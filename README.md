@@ -140,6 +140,8 @@ claude mcp add roblox-2021 -- node "C:/path/to/server.js"
 | `create_instance` | Creates new instances (`Part`, `Model`, `ScreenGui`, etc.) with initial properties. |
 | `delete_instance` | Destroys instances in the DataModel safely. |
 | `get_output_log` | Retrieves recent output log messages from Studio. |
+| `script_grep` | Global search across all scripts in the place for matching text/regex lines. |
+| `inspect_instance` | Inspects detailed properties, children, attributes, and tags of any instance. |
 
 ---
 

@@ -4,6 +4,15 @@ All notable changes to the Aisaka 2021 Roblox Studio MCP Bridge & ZeroScript Ext
 
 ## [1.5.5] - 2026-09-13
 
+### Added
+- **New MCP Tool: `script_grep`**:
+  - Global text and pattern search across every `Script`, `LocalScript`, and `ModuleScript` in the game.
+  - Safe traversal restricting scans to user datamodel services to prevent `identity 5 lacks permission 6` permission errors.
+  - Returns script paths, line numbers, and matching code lines.
+- **New MCP Tool: `inspect_instance`**:
+  - Deep property inspector for any instance in the game (parts, models, GUIs, sounds, values, humanoids, particles, etc.).
+  - Extracts CFrames, Vector3 positions, Colors, Attributes, and CollectionService tags.
+
 ### Upgraded
 - **ZeroScript Browser Extension v1.5.5**:
   - **DeepSeek Unified Model Support**: Added full support for DeepSeek's new unified model (where Instant, Expert, and Vision tabs are merged into one). Fixes "DeepSeek mode not ready" error on startup.

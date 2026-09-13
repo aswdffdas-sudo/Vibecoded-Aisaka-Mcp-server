@@ -268,6 +268,9 @@ async function handleToolDispatch(name, args) {
     }
     return await sendToStudio("write_script", { path: filePath, source: updated });
   }
+  if (name === "script_search" || name === "search_scripts") {
+    return await sendToStudio("script_grep", args);
+  }
 
   return await sendToStudio(name, args);
 }
@@ -399,6 +402,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: { limit: { type: "number", default: 50 } },
+        },
+      },
+      {
+        name: "script_grep",
+        description: "Searches all Scripts, LocalScripts, and ModuleScripts across the place for a text pattern or keyword",
+        inputSchema: {
+          type: "object",
+          properties: {
+            pattern: { type: "string", description: "The string or keyword to search for" },
+            case_sensitive: { type: "boolean", default: false, description: "Whether to perform a case-sensitive match" },
+            root: { type: "string", description: "Optional root path to search within (defaults to all game services)" },
+            max_matches: { type: "number", default: 100, description: "Maximum number of matches to return" },
+          },
+          required: ["pattern"],
+        },
+      },
+      {
+        name: "inspect_instance",
+        description: "Inspects detailed properties, children, attributes, and tags of an instance",
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "The path of the instance (e.g. Workspace.Part or ServerScriptService.Handler)" },
+          },
+          required: ["path"],
         },
       },
     ],

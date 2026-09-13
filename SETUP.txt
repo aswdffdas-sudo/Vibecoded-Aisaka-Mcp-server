@@ -112,6 +112,8 @@ AVAILABLE TOOLS EXPOSED TO THE AI
 - create_instance: Creates parts, models, GUIs, or scripts.
 - delete_instance: Removes instances from the game.
 - get_output_log: Reads the Studio console output history.
+- script_grep: Global regex/text search across all scripts in the game.
+- inspect_instance: Inspects detailed properties, attributes, and tags of any object.
 
 ================================================================================
 You're all set! Now your AI can inspect, see, and edit your 2021 Roblox game!
