@@ -142,6 +142,10 @@ claude mcp add roblox-2021 -- node "C:/path/to/server.js"
 | `get_output_log` | Retrieves recent output log messages from Studio. |
 | `script_grep` | Global search across all scripts in the place for matching text/regex lines. |
 | `inspect_instance` | Inspects detailed properties, children, attributes, and tags of any instance. |
+| `audit_scene_assets` | Scans all 3D scene objects (sounds, meshes, decals, particles, clothing) and reports external asset IDs. |
+| `start_playtest` | Starts a playtest in Studio (`mode`: `"play"` [F5] or `"run"` [F8]). |
+| `stop_playtest` | Stops the active playtest simulation and returns to Edit mode (Shift+F5). |
+| `run_playtest` | Autonomous AI test: launches test, monitors for console errors over N seconds, takes gameplay screenshot, and returns to Edit mode. |
 
 ---
 

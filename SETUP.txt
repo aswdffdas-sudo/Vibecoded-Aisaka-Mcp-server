@@ -114,6 +114,10 @@ AVAILABLE TOOLS EXPOSED TO THE AI
 - get_output_log: Reads the Studio console output history.
 - script_grep: Global regex/text search across all scripts in the game.
 - inspect_instance: Inspects detailed properties, attributes, and tags of any object.
+- audit_scene_assets: Scans all 3D scene objects (sounds, meshes, decals, particles) for asset IDs.
+- start_playtest: Starts Play Solo (F5) or Run (F8).
+- stop_playtest: Stops playtest and returns to Edit mode (Shift+F5).
+- run_playtest: Autonomous AI test run: tests game, captures errors & screenshot, stops cleanly.
 
 ================================================================================
 You're all set! Now your AI can inspect, see, and edit your 2021 Roblox game!

@@ -547,6 +547,132 @@ Handlers["inspect_instance"] = function(args)
     return result
 end
 
+-- Helper to extract asset ID numbers from urls or rbxassetid strings
+local function extractAssetId(str)
+    if type(str) ~= "string" or str == "" then return nil end
+    local id = string.match(str, "%d+")
+    if id and #id >= 3 then
+        return tonumber(id)
+    end
+    return nil
+end
+
+-- 10. Audit Scene Assets (Meshes, Sounds, Textures, Decals, Animations, Clothing)
+Handlers["audit_scene_assets"] = function(args)
+    local targetService = args.service
+    local roots = {}
+
+    if targetService and targetService ~= "" then
+        local r = resolvePath(targetService)
+        if r then
+            table.insert(roots, r)
+        else
+            error("Target instance or service not found: " .. tostring(targetService))
+        end
+    else
+        for _, sName in ipairs(SAFE_SERVICES) do
+            local ok, s = pcall(function() return game:GetService(sName) end)
+            if ok and s then
+                table.insert(roots, s)
+            end
+        end
+    end
+
+    local categories = {
+        Sounds = {},
+        Meshes = {},
+        Textures = {},
+        Animations = {},
+        Clothing = {}
+    }
+
+    local totalObjectsScanned = 0
+
+    local function recordAsset(catName, id, inst, propName)
+        if not id then return end
+        local cat = categories[catName]
+        local key = tostring(id)
+        if not cat[key] then
+            cat[key] = {
+                id = id,
+                count = 0,
+                property = propName,
+                sampleInstance = inst:GetFullName(),
+                className = inst.ClassName
+            }
+        end
+        cat[key].count = cat[key].count + 1
+    end
+
+    local function scan(inst)
+        totalObjectsScanned = totalObjectsScanned + 1
+        local cls = inst.ClassName
+
+        if cls == "Sound" then
+            recordAsset("Sounds", extractAssetId(inst.SoundId), inst, "SoundId")
+        elseif cls == "MeshPart" then
+            recordAsset("Meshes", extractAssetId(inst.MeshId), inst, "MeshId")
+            recordAsset("Textures", extractAssetId(inst.TextureID), inst, "TextureID")
+        elseif cls == "SpecialMesh" then
+            recordAsset("Meshes", extractAssetId(inst.MeshId), inst, "MeshId")
+            recordAsset("Textures", extractAssetId(inst.TextureId), inst, "TextureId")
+        elseif cls == "CharacterMesh" then
+            recordAsset("Meshes", extractAssetId(inst.MeshId), inst, "MeshId")
+            recordAsset("Textures", extractAssetId(inst.BaseTextureId), inst, "BaseTextureId")
+            recordAsset("Textures", extractAssetId(inst.OverlayTextureId), inst, "OverlayTextureId")
+        elseif cls == "Decal" or cls == "Texture" then
+            recordAsset("Textures", extractAssetId(inst.Texture), inst, "Texture")
+        elseif cls == "Animation" then
+            recordAsset("Animations", extractAssetId(inst.AnimationId), inst, "AnimationId")
+        elseif cls == "Shirt" then
+            recordAsset("Clothing", extractAssetId(inst.ShirtTemplate), inst, "ShirtTemplate")
+        elseif cls == "Pants" then
+            recordAsset("Clothing", extractAssetId(inst.PantsTemplate), inst, "PantsTemplate")
+        elseif cls == "ShirtGraphic" then
+            recordAsset("Clothing", extractAssetId(inst.Graphic), inst, "Graphic")
+        elseif cls == "Sky" then
+            recordAsset("Textures", extractAssetId(inst.SkyboxBk), inst, "SkyboxBk")
+            recordAsset("Textures", extractAssetId(inst.SkyboxDn), inst, "SkyboxDn")
+            recordAsset("Textures", extractAssetId(inst.SkyboxFt), inst, "SkyboxFt")
+            recordAsset("Textures", extractAssetId(inst.SkyboxLf), inst, "SkyboxLf")
+            recordAsset("Textures", extractAssetId(inst.SkyboxRt), inst, "SkyboxRt")
+            recordAsset("Textures", extractAssetId(inst.SkyboxUp), inst, "SkyboxUp")
+        elseif cls == "ParticleEmitter" or cls == "Beam" or cls == "Trail" then
+            recordAsset("Textures", extractAssetId(inst.Texture), inst, "Texture")
+        end
+
+        local children = inst:GetChildren()
+        for _, child in ipairs(children) do
+            scan(child)
+        end
+    end
+
+    for _, root in ipairs(roots) do
+        scan(root)
+    end
+
+    local summary = {}
+    local totalUnique = 0
+
+    for catName, items in pairs(categories) do
+        local list = {}
+        for _, info in pairs(items) do
+            table.insert(list, info)
+            totalUnique = totalUnique + 1
+        end
+        summary[catName] = {
+            uniqueCount = #list,
+            assets = list
+        }
+    end
+
+    return {
+        totalObjectsScanned = totalObjectsScanned,
+        totalUniqueAssets = totalUnique,
+        categories = summary
+    }
+end
+
 -- Plugin UI & Toolbar Setup
 local isRunning = true
 local toolbar = plugin:CreateToolbar("MCP 2021 Bridge")

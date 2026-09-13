@@ -284,6 +284,52 @@ $ms.Dispose()
   }
 }
 
+// Windows Keyboard Automation for Studio Playtest Control
+function sendStudioKey(keyCombination) {
+  const psScript = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinUserPlaytest {
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+}
+"@
+$procs = Get-Process | Where-Object { 
+    $_.ProcessName -eq "AisakaStudio" -or
+    $_.ProcessName -like "*RobloxStudio*" -or
+    $_.MainWindowTitle -like "*Roblox Studio*" -or 
+    $_.MainWindowTitle -like "*Aisaka*"
+}
+if ($procs) {
+    $proc = $procs[0]
+    $hwnd = $proc.MainWindowHandle
+    if ([WinUserPlaytest]::IsIconic($hwnd)) {
+        [WinUserPlaytest]::ShowWindow($hwnd, 9) | Out-Null
+        Start-Sleep -Milliseconds 200
+    }
+    [WinUserPlaytest]::SetForegroundWindow($hwnd) | Out-Null
+    Start-Sleep -Milliseconds 250
+    [System.Windows.Forms.SendKeys]::SendWait("${keyCombination}")
+} else {
+    Write-Error "Roblox Studio process not found"
+}
+`;
+  const tmp = path.join(os.tmpdir(), `play_${Date.now()}.ps1`);
+  try {
+    fs.writeFileSync(tmp, psScript, "utf-8");
+    execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tmp}"`, {
+      timeout: 10000,
+      windowsHide: true,
+    });
+  } finally {
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
 // Tool Dispatch Handler with ZeroScript / Modern Aliases
 async function handleToolDispatch(name, args) {
   if (name === "list_roblox_studios") {
@@ -340,6 +386,89 @@ async function handleToolDispatch(name, args) {
   }
   if (name === "script_search" || name === "search_scripts") {
     return await sendToStudio("script_grep", args);
+  }
+  if (name === "audit_scene_assets") {
+    return await sendToStudio("audit_scene_assets", args);
+  }
+  if (name === "start_playtest") {
+    const mode = (args.mode || "play").toLowerCase();
+    const key = mode === "run" ? "{F8}" : "{F5}";
+    sendStudioKey(key);
+    return {
+      status: "started",
+      mode: mode === "run" ? "Run (Physics/Server Simulation)" : "Play Solo",
+      message: `Started ${mode === "run" ? "Run simulation (F8)" : "Play Solo (F5)"} in Roblox Studio.`
+    };
+  }
+  if (name === "stop_playtest") {
+    sendStudioKey("+{F5}");
+    return {
+      status: "stopped",
+      message: "Stopped playtest simulation (Shift+F5). Returned to Edit mode."
+    };
+  }
+  if (name === "run_playtest") {
+    const duration = Math.min(30, Math.max(2, Number(args.duration) || 5));
+    const mode = (args.mode || "play").toLowerCase();
+    const captureScreen = args.capture_screen !== false;
+    const startKey = mode === "run" ? "{F8}" : "{F5}";
+
+    // 1. Launch playtest
+    sendStudioKey(startKey);
+
+    // 2. Wait for test duration
+    await new Promise((resolve) => setTimeout(resolve, duration * 1000));
+
+    // 3. Capture screenshot during play if enabled
+    let imageBase64 = null;
+    if (captureScreen) {
+      try {
+        imageBase64 = captureScreenBase64();
+      } catch (e) {
+        console.error("Playtest screenshot capture failed:", e.message);
+      }
+    }
+
+    // 4. Stop playtest and return to edit mode
+    sendStudioKey("+{F5}");
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    // 5. Gather and filter output logs
+    let logs = "";
+    try {
+      logs = await sendToStudio("get_output_log", { limit: 60 });
+    } catch {}
+
+    const errors = [];
+    const warnings = [];
+    if (typeof logs === "string") {
+      for (const line of logs.split("\n")) {
+        if (line.includes("[Error]") || line.includes("HTTP 5") || line.includes("Server Error")) {
+          errors.push(line);
+        } else if (line.includes("[Warning]")) {
+          warnings.push(line);
+        }
+      }
+    }
+
+    const summary = `=== Playtest Results (${mode === "run" ? "Run" : "Play Solo"} - ${duration}s) ===
+Errors Detected: ${errors.length}
+Warnings Detected: ${warnings.length}
+${errors.length > 0 ? "\nErrors Found:\n" + errors.slice(0, 10).join("\n") : "No script or engine errors detected during playtest."}
+
+Recent Console Output:
+${typeof logs === "string" ? logs.split("\n").slice(-15).join("\n") : ""}`;
+
+    return {
+      status: "completed",
+      durationSeconds: duration,
+      mode,
+      errorsCount: errors.length,
+      errors: errors.slice(0, 15),
+      warningsCount: warnings.length,
+      summary,
+      imageBase64
+    };
   }
 
   return await sendToStudio(name, args);
@@ -499,6 +628,46 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["path"],
         },
       },
+      {
+        name: "audit_scene_assets",
+        description: "Scans all 3D objects in the scene (sounds, meshes, decals, animations, clothing) and reports all external asset IDs",
+        inputSchema: {
+          type: "object",
+          properties: {
+            service: { type: "string", description: "Optional specific service or model path to scan (defaults to all services)" },
+          },
+        },
+      },
+      {
+        name: "start_playtest",
+        description: "Starts a playtest in Roblox Studio (F5 for Play Solo, F8 for Run / Server Simulation)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            mode: { type: "string", enum: ["play", "run"], default: "play", description: "'play' for Play Solo (F5), 'run' for physics/server simulation (F8)" },
+          },
+        },
+      },
+      {
+        name: "stop_playtest",
+        description: "Stops the active playtest simulation in Roblox Studio and returns to Edit mode (Shift+F5)",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
+        name: "run_playtest",
+        description: "Runs an autonomous test: starts playtest, monitors for runtime errors over duration, captures screenshot, and stops test",
+        inputSchema: {
+          type: "object",
+          properties: {
+            duration: { type: "number", default: 5, description: "Seconds to run test (2 to 30, default 5)" },
+            mode: { type: "string", enum: ["play", "run"], default: "play", description: "Test mode: 'play' (Play Solo) or 'run' (Run)" },
+            capture_screen: { type: "boolean", default: true, description: "Whether to snap a screenshot during the test" },
+          },
+        },
+      },
     ],
   };
 });
@@ -525,6 +694,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     const res = await handleToolDispatch(name, args || {});
+
+    if (name === "run_playtest" && res && res.imageBase64) {
+      return {
+        content: [
+          { type: "image", data: res.imageBase64, mimeType: "image/png" },
+          { type: "text", text: res.summary || JSON.stringify(res, null, 2) },
+        ],
+      };
+    }
+
     return {
       content: [
         {

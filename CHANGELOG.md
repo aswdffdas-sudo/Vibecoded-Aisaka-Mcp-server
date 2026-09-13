@@ -10,6 +10,13 @@ All notable changes to the Aisaka 2021 Roblox Studio MCP Bridge & ZeroScript Ext
   2. **Studio Heartbeat & Fast-Failure**: Tracks Studio heartbeat in real-time. Automatically rejects tool calls immediately with informative error if Studio is closed or loading, eliminating 25-second silent hangs.
   3. **Infinite-Loop Guard & Coroutine Watchdog**: Static AST-like scanner intercepts unyielding `while` / `repeat` loops before execution to protect Studio from freezing. Also executes code inside a monitored coroutine with an 8-second watchdog limit.
   4. **UTF-8 Sanitizer & Payload Capping**: Recursively sanitizes non-printable and invalid UTF-8 bytes to prevent `HttpService:JSONEncode()` crashes. Enforces a 750KB payload ceiling to stay comfortably beneath Roblox's 1MB HTTP POST limit.
+- **New MCP Tool: `audit_scene_assets`**:
+  - Scans all 3D scene objects (sounds, meshes, decals, particles, clothing, skyboxes) across game services and extracts all external numeric asset IDs.
+  - Groups results by category (`Sounds`, `Meshes`, `Textures`, `Animations`, `Clothing`) with occurrence counts and sample instance paths.
+- **New MCP Playtest Suite**:
+  - `start_playtest`: Triggers simulation via Windows automation (`mode: "play"` for F5 Play Solo, `"run"` for F8 Run).
+  - `stop_playtest`: Halts simulation (Shift+F5) and returns Studio to Edit mode.
+  - `run_playtest`: Fully autonomous AI test run. Launches test, captures runtime errors over N seconds, takes a gameplay screenshot, stops test, and returns an error diagnostic report.
 - **New MCP Tool: `script_grep`**:
   - Global text and pattern search across every `Script`, `LocalScript`, and `ModuleScript` in the game.
   - Safe traversal restricting scans to user datamodel services to prevent `identity 5 lacks permission 6` permission errors.
