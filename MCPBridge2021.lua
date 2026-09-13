@@ -16,6 +16,91 @@ pcall(function()
     ServerScriptService.LoadStringEnabled = true
 end)
 
+-- Safe string & payload sanitizer to prevent JSON encoding errors with invalid UTF-8 bytes
+local function sanitizeUtf8(str)
+    if type(str) ~= "string" then return str end
+    return string.gsub(str, "[\0-\8\11\12\14-\31\127]", "")
+end
+
+local function sanitizeValue(val)
+    local t = type(val)
+    if t == "string" then
+        return sanitizeUtf8(val)
+    elseif t == "table" then
+        local clean = {}
+        for k, v in pairs(val) do
+            local cleanKey = type(k) == "string" and sanitizeUtf8(k) or k
+            clean[cleanKey] = sanitizeValue(v)
+        end
+        return clean
+    else
+        return val
+    end
+end
+
+local MAX_PAYLOAD_BYTES = 750000 -- 750 KB safe payload limit (well below 1 MB HTTP limit)
+
+local function safeJsonEncode(tbl)
+    local sanitized = sanitizeValue(tbl)
+    local ok, json = pcall(function()
+        return HttpService:JSONEncode(sanitized)
+    end)
+
+    if not ok then
+        return HttpService:JSONEncode({
+            id = tbl.id,
+            success = false,
+            error = "Failed to encode response into JSON (invalid binary or non-UTF8 characters detected)"
+        })
+    end
+
+    if #json > MAX_PAYLOAD_BYTES then
+        return HttpService:JSONEncode({
+            id = tbl.id,
+            success = false,
+            error = string.format("Response payload too large (%d KB exceeds 750 KB safety limit). Narrow search or read smaller ranges.", math.floor(#json / 1024))
+        })
+    end
+
+    return json
+end
+
+-- Static safety scanner to prevent unyielding infinite loops from freezing Studio
+local function checkUnsafeLoop(code)
+    if type(code) ~= "string" or code == "" then
+        return true
+    end
+
+    local stripped = string.gsub(code, "%-%-%[%[.-%]%]", "")
+    stripped = string.gsub(stripped, "%-%-[^\r\n]*", "")
+    stripped = string.gsub(stripped, "\"[^\"]*\"", '""')
+    stripped = string.gsub(stripped, "'[^']*'", "''")
+
+    for whileBody in string.gmatch(stripped, "while%s+[%w_%.%(%)]+%s+do(.-)end") do
+        local hasYield = string.find(whileBody, "wait%s*%(") or 
+                         string.find(whileBody, "task%.wait") or 
+                         string.find(whileBody, "break") or 
+                         string.find(whileBody, "return")
+        if not hasYield then
+            return false, "Unyielding while-loop detected without wait() or break. Execution aborted to prevent Studio freeze."
+        end
+    end
+
+    for repeatBody in string.gmatch(stripped, "repeat(.-)until%s+[%w_%.%(%)]+") do
+        if string.find(repeatBody, "false") or string.find(repeatBody, "nil") then
+            local hasYield = string.find(repeatBody, "wait%s*%(") or 
+                             string.find(repeatBody, "task%.wait") or 
+                             string.find(repeatBody, "break") or 
+                             string.find(repeatBody, "return")
+            if not hasYield then
+                return false, "Unyielding repeat-until loop detected without wait() or break. Execution aborted."
+            end
+        end
+    end
+
+    return true
+end
+
 -- Safe path resolution supporting service names and nested instances
 local function resolvePath(pathStr)
     if not pathStr or pathStr == "" or pathStr == "game" then
@@ -61,11 +146,17 @@ end
 -- Handlers for MCP tool requests
 local Handlers = {}
 
--- 1. Execute Luau
+-- 1. Execute Luau with Safety Scanner & Coroutine Watchdog
 Handlers["execute_luau"] = function(args)
     local code = args.code
     if not code or code == "" then
         error("Missing required parameter: code")
+    end
+
+    -- 1. Static loop safety check
+    local isSafe, safetyErr = checkUnsafeLoop(code)
+    if not isSafe then
+        error(safetyErr)
     end
 
     local fn, compileErr = loadstring(code)
@@ -74,22 +165,37 @@ Handlers["execute_luau"] = function(args)
     end
 
     ChangeHistoryService:SetWaypoint("MCP_ExecuteBefore")
-    local results = table.pack(pcall(fn))
-    ChangeHistoryService:SetWaypoint("MCP_ExecuteAfter")
 
-    local ok = results[1]
+    -- 2. Execute within a monitored coroutine
+    local co = coroutine.create(fn)
+    local startTime = tick()
+    local maxExecutionTime = 8.0 -- seconds
+
+    local ok, res1, res2 = coroutine.resume(co)
     if not ok then
-        error(tostring(results[2]))
+        ChangeHistoryService:SetWaypoint("MCP_ExecuteAfter")
+        error(tostring(res1))
     end
 
-    if results.n > 1 then
-        local outputs = {}
-        for i = 2, results.n do
-            table.insert(outputs, tostring(results[i]))
+    -- If the coroutine completed synchronously
+    if coroutine.status(co) == "dead" then
+        ChangeHistoryService:SetWaypoint("MCP_ExecuteAfter")
+        if res1 ~= nil then
+            return tostring(res1)
         end
-        return table.concat(outputs, "\t")
+        return "Executed successfully"
     end
 
+    -- If the coroutine yielded (e.g. wait or WaitForChild), monitor with a watchdog loop
+    while coroutine.status(co) ~= "dead" do
+        if tick() - startTime > maxExecutionTime then
+            ChangeHistoryService:SetWaypoint("MCP_ExecuteAfter")
+            error(string.format("Execution timed out after %.1fs (code yielded indefinitely or got stuck in a long loop)", maxExecutionTime))
+        end
+        sleep(0.05)
+    end
+
+    ChangeHistoryService:SetWaypoint("MCP_ExecuteAfter")
     return "Executed successfully"
 end
 
@@ -496,34 +602,39 @@ spawnThread(function()
                             toolResult = "No handler registered for tool: " .. tostring(data.tool)
                         end
 
-                        -- Return response back to the local MCP server
+                        -- Return response back to the local MCP server with safe JSON encoding & size capping
                         pcall(function()
+                            local responseBody = safeJsonEncode({
+                                id = data.id,
+                                success = toolSuccess,
+                                result = toolSuccess and toolResult or nil,
+                                error = (not toolSuccess) and tostring(toolResult) or nil
+                            })
                             HttpService:RequestAsync({
                                 Url = BRIDGE_URL .. "/respond",
                                 Method = "POST",
                                 Headers = {
                                     ["Content-Type"] = "application/json"
                                 },
-                                Body = HttpService:JSONEncode({
-                                    id = data.id,
-                                    success = toolSuccess,
-                                    result = toolSuccess and toolResult or nil,
-                                    error = (not toolSuccess) and tostring(toolResult) or nil
-                                })
+                                Body = responseBody
                             })
                         end)
                     end
                 end
+
+                -- Long-poll loop: minimal yield (0.02s) because server holds the request when idle
+                sleep(0.02)
             else
                 consecutiveFailures = consecutiveFailures + 1
+                -- Back off when server is offline
+                if consecutiveFailures > 2 then
+                    sleep(1.0)
+                else
+                    sleep(0.5)
+                end
             end
-        end
-
-        -- Poll interval: fast (0.15s) when running, back off to 1s if server offline
-        if consecutiveFailures > 2 then
-            sleep(1.0)
         else
-            sleep(0.15)
+            sleep(0.5)
         end
     end
 end)

@@ -20,19 +20,71 @@ app.use(express.json({ limit: "50mb" }));
 // Queue of pending requests for the 2021 Roblox Studio plugin
 const pendingRequests = new Map();
 
-// Endpoint polled by 2021 Roblox Studio plugin
-app.get("/poll", (req, res) => {
+// Studio Heartbeat & Long-Polling State
+let lastStudioPollTime = 0;
+let activePoller = null;
+let activePollerTimer = null;
+
+function tryDispatchPending(res) {
   for (const [id, reqData] of pendingRequests.entries()) {
     if (!reqData.inFlight) {
       reqData.inFlight = true;
-      return res.json({
+      res.json({
         id,
         tool: reqData.tool,
         args: reqData.args,
       });
+      return true;
     }
   }
-  return res.status(204).end();
+  return false;
+}
+
+function notifyPoller() {
+  if (activePoller) {
+    clearTimeout(activePollerTimer);
+    const poller = activePoller;
+    activePoller = null;
+    activePollerTimer = null;
+    tryDispatchPending(poller);
+  }
+}
+
+// Endpoint polled by 2021 Roblox Studio plugin (HTTP Long-Polling)
+app.get("/poll", (req, res) => {
+  lastStudioPollTime = Date.now();
+
+  // If work is already queued, dispatch immediately
+  if (tryDispatchPending(res)) {
+    return;
+  }
+
+  // Release any previous held poller socket
+  if (activePoller) {
+    clearTimeout(activePollerTimer);
+    try {
+      activePoller.status(204).end();
+    } catch {}
+    activePoller = null;
+  }
+
+  // Hold request open for up to 2.5 seconds (long-polling)
+  activePoller = res;
+  activePollerTimer = setTimeout(() => {
+    if (activePoller === res) {
+      activePoller = null;
+      activePollerTimer = null;
+      res.status(204).end();
+    }
+  }, 2500);
+
+  req.on("close", () => {
+    if (activePoller === res) {
+      clearTimeout(activePollerTimer);
+      activePoller = null;
+      activePollerTimer = null;
+    }
+  });
 });
 
 // Endpoint called by 2021 Roblox Studio plugin with execution results
@@ -54,10 +106,13 @@ app.post("/respond", (req, res) => {
 
 // REST API for web extensions
 app.get("/api/status", (req, res) => {
+  const isStudioAlive = lastStudioPollTime > 0 && Date.now() - lastStudioPollTime < 4500;
   res.json({
     ok: true,
     server: "Aisaka 2021 Roblox Studio MCP",
     version: "1.5.5-retro",
+    studioConnected: isStudioAlive,
+    lastHeartbeatSec: lastStudioPollTime > 0 ? Math.round((Date.now() - lastStudioPollTime) / 1000) : null,
     port: PORT,
     pending: pendingRequests.size,
   });
@@ -96,6 +151,18 @@ httpListener.on("error", (err) => {
 });
 
 async function sendToStudio(tool, args, timeoutMs = 25000) {
+  // Fast-fail if Studio has disconnected or never connected
+  const timeSinceLastPoll = Date.now() - lastStudioPollTime;
+  if (lastStudioPollTime > 0 && timeSinceLastPoll > 4500) {
+    throw new Error(
+      `Roblox Studio is offline or unresponsive (last heartbeat ${Math.round(timeSinceLastPoll / 1000)}s ago). Please open Studio and enable the MCP plugin.`
+    );
+  } else if (lastStudioPollTime === 0 && httpListener.listening) {
+    throw new Error(
+      "Roblox Studio has not connected yet. Please ensure Studio is open with the MCP plugin installed and running."
+    );
+  }
+
   // If we are in secondary process where port was bound by another process, forward via localhost:3021
   if (!httpListener.listening) {
     try {
@@ -127,6 +194,9 @@ async function sendToStudio(tool, args, timeoutMs = 25000) {
       reject,
       timeout,
     });
+
+    // Instantly notify active long-polling socket
+    notifyPoller();
   });
 }
 
