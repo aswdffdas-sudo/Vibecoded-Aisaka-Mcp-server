@@ -214,9 +214,10 @@ const ZSProvider = (() => {
   const chatIsEmpty = () => allItems().length === 0;
 
   // A genuinely FRESH/new chat (not an existing conversation whose messages are
-  // still loading): DeepSeek only shows the Expert/Rapide mode selector on a
-  // brand-new empty chat.
-  const isFreshChat = () => chatIsEmpty() && !!document.querySelector(S.modeRadioGroup);
+  // still loading). The old UI flagged this with the Instant/Expert/Vision
+  // selector, but the 2026-09 unified model has NO selector at all - so key off
+  // the URL instead: an existing conversation lives under /…/s/<id>.
+  const isFreshChat = () => chatIsEmpty() && !!getEditor() && !/\/s\/[^/]+/.test(location.pathname);
 
   // The whole composer "box" = the smallest ancestor that contains the input, the
   // send button AND (on a blank chat) the Expert/Rapide mode selector. The core's
@@ -335,7 +336,9 @@ const ZSProvider = (() => {
     const b = badgeVision();
     if (b != null) { _visLatch = b; _visLatchSet = true; return (_visCache = b); }
     if (_visLatchSet) return (_visCache = _visLatch);
-    return (_visCache = false);
+    // No selector and no Instant/Expert/Vision badge = the 2026-09 UNIFIED model
+    // (Instant + Expert + Vision merged, nothing to pick), which reads images.
+    return (_visCache = true);
   }
   const isVisionSelected = () => detectVision();
 
@@ -421,12 +424,17 @@ const ZSProvider = (() => {
       // Ready as soon as an agent-usable model is on (Expert, or Vision/Instant if
       // the user chose one) and Search is off. DeepThink is only required if a
       // legacy toggle is actually present (V4 has none).
-      if ((state.expertOn || state.visionOn || state.instantOn) && state.searchOff && (state.deepThinkOn || !state.deepThinkFound)) break;
+      const anyModel = state.expertOn || state.visionOn || state.instantOn ||
+        (!state.expertFound && !state.visionFound && !state.instantFound);
+      if (anyModel && state.searchOff && (state.deepThinkOn || !state.deepThinkFound)) break;
       await sleep(120);
     }
     state = composerModeState();
-    diag("mode_ready", { reason, ...state });
-    return { ...state, ready: state.expertOn || state.visionOn || state.instantOn };
+    // Unified model (2026-09): no model tabs exist, so there is nothing to pick -
+    // ready once Search is off.
+    const unified = !state.expertFound && !state.visionFound && !state.instantFound;
+    diag("mode_ready", { reason, unified, ...state });
+    return { ...state, unified, ready: state.expertOn || state.visionOn || state.instantOn || (unified && state.searchOff) };
   }
 
   // DeepSeek's footer button doubles as SEND (an upward arrow) and STOP (a
@@ -964,7 +972,7 @@ const ZSProvider = (() => {
       // Version beacon: stamp the loaded build onto <html> so a reload can be
       // confirmed from the page (read document.documentElement.dataset.zsDsVer).
       // BUMP DS_VER on meaningful deepseek.js changes worth verifying live.
-      try { document.documentElement.setAttribute("data-zs-ds-ver", "2026-07_vision-badge-priority"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-ds-ver", "2026-09_unified-model"); } catch {}
     },
     // turns
     allItems, isUserItem, isAssistantItem, itemText, classifyText,

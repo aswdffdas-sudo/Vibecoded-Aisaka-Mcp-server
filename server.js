@@ -57,7 +57,7 @@ app.get("/api/status", (req, res) => {
   res.json({
     ok: true,
     server: "Aisaka 2021 Roblox Studio MCP",
-    version: "1.5.4-retro",
+    version: "1.5.5-retro",
     port: PORT,
     pending: pendingRequests.size,
   });
@@ -276,7 +276,7 @@ async function handleToolDispatch(name, args) {
 const server = new Server(
   {
     name: "roblox-2021-studio",
-    version: "1.5.4",
+    version: "1.5.5",
   },
   {
     capabilities: {

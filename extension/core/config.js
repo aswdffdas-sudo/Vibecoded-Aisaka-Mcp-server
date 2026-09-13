@@ -23,9 +23,9 @@ const ZS = (() => {
   function toolCategory(name) {
     const n = (name || "").includes("/") ? name.split("/").pop() : (name || "");
     if (n === "list_commands" || n === "list_tools") return "read";
-    if (/^(script_read|read_script|script_search|script_grep|search_game_tree|get_tree|inspect_instance|get_studio_state|get_console_output|get_output_log|search_creator_store|list_roblox_studios)$/.test(n))
+    if (/^(script_read|script_search|script_grep|search_game_tree|inspect_instance|get_studio_state|get_console_output|search_creator_store|list_roblox_studios)$/.test(n))
       return "read";
-    if (/^(multi_edit|write_script|create_instance|delete_instance|insert_from_creator_store|store_image)$/.test(n) || n === "execute_luau")
+    if (/^(multi_edit|insert_from_creator_store|store_image)$/.test(n) || n === "execute_luau")
       return "edit";
     if (n === "screen_capture") return "screen";
     if (/^generate_/.test(n)) return "generate";
