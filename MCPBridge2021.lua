@@ -11,7 +11,10 @@ local BRIDGE_URL = "http://127.0.0.1:3021"
 local sleep = (task and task.wait) or wait
 local spawnThread = (task and task.spawn) or spawn
 
--- Enable loadstring if not already enabled
+-- Auto-enable HttpService and LoadString so users never have to configure settings manually
+pcall(function()
+    HttpService.HttpEnabled = true
+end)
 pcall(function()
     ServerScriptService.LoadStringEnabled = true
 end)
@@ -752,6 +755,10 @@ spawnThread(function()
                 sleep(0.02)
             else
                 consecutiveFailures = consecutiveFailures + 1
+                -- Auto-recover: ensure HttpService stays enabled
+                pcall(function()
+                    HttpService.HttpEnabled = true
+                end)
                 -- Back off when server is offline
                 if consecutiveFailures > 2 then
                     sleep(1.0)
